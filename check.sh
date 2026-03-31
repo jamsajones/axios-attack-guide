@@ -44,21 +44,25 @@ else
   echo "  SKIP: npm not found"
 fi
 
-# --- Check 2: Parse package-lock.json for axios specifically ---
+# --- Check 2: Parse lockfiles for axios specifically ---
 echo ""
-echo "[2/6] Checking package-lock.json for axios-specific entries..."
-if [ -f "package-lock.json" ]; then
-  # Look for axios package entries specifically (not just version numbers)
-  AXIOS_LOCK=$(grep -A 3 '"axios":' package-lock.json | grep -E '"version":\s*"(1\.14\.1|0\.30\.4)"')
+echo "[2/6] Checking lockfiles for axios-specific entries..."
+LOCKFILE_FOUND=0
 
+if [ -f "package-lock.json" ]; then
+  LOCKFILE_FOUND=1
+  AXIOS_LOCK=$(grep -A 3 '"axios":' package-lock.json | grep -E '"version":\s*"(1\.14\.1|0\.30\.4)"')
   if [ -n "$AXIOS_LOCK" ]; then
     echo "  !! AFFECTED: Compromised axios version found in package-lock.json"
     echo "$AXIOS_LOCK"
     FOUND=1
   else
-    echo "  OK: No compromised axios in lockfile"
+    echo "  OK: No compromised axios in package-lock.json"
   fi
-elif [ -f "yarn.lock" ]; then
+fi
+
+if [ -f "yarn.lock" ]; then
+  LOCKFILE_FOUND=1
   AXIOS_LOCK=$(grep -A 1 "^axios@" yarn.lock | grep -E "version (1\.14\.1|0\.30\.4)")
   if [ -n "$AXIOS_LOCK" ]; then
     echo "  !! AFFECTED: Compromised axios version found in yarn.lock"
@@ -67,7 +71,49 @@ elif [ -f "yarn.lock" ]; then
   else
     echo "  OK: No compromised axios in yarn.lock"
   fi
-else
+fi
+
+if [ -f "pnpm-lock.yaml" ]; then
+  LOCKFILE_FOUND=1
+  LOCK_HIT=$(grep -E "(^|/)axios@(1\.14\.1|0\.30\.4):" pnpm-lock.yaml | head -3)
+  if [ -n "$LOCK_HIT" ]; then
+    echo "  !! AFFECTED: Compromised axios version found in pnpm-lock.yaml"
+    echo "  $LOCK_HIT"
+    FOUND=1
+  else
+    echo "  OK: No compromised axios in pnpm-lock.yaml"
+  fi
+fi
+
+if [ -f "deno.lock" ]; then
+  LOCKFILE_FOUND=1
+  LOCK_HIT=$(grep -E '"axios@(1\.14\.1|0\.30\.4)"' deno.lock | head -3)
+  if [ -n "$LOCK_HIT" ]; then
+    echo "  !! AFFECTED: Compromised axios version found in deno.lock"
+    echo "  $LOCK_HIT"
+    FOUND=1
+  else
+    echo "  OK: No compromised axios in deno.lock"
+  fi
+fi
+
+if [ -f "bun.lockb" ]; then
+  LOCKFILE_FOUND=1
+  if command -v bun &> /dev/null; then
+    LOCK_HIT=$(bun bun.lockb 2>/dev/null | grep -E "axios@.*(1\.14\.1|0\.30\.4)" | head -3)
+    if [ -n "$LOCK_HIT" ]; then
+      echo "  !! AFFECTED: Compromised axios version found in bun.lockb"
+      echo "  $LOCK_HIT"
+      FOUND=1
+    else
+      echo "  OK: No compromised axios in bun.lockb"
+    fi
+  else
+    echo "  WARN: bun.lockb found but 'bun' not installed — cannot decode binary lockfile, skipping"
+  fi
+fi
+
+if [ $LOCKFILE_FOUND -eq 0 ]; then
   echo "  SKIP: No lockfile found in current directory"
 fi
 
@@ -75,7 +121,7 @@ fi
 echo ""
 echo "[3/6] Checking lockfile git history (forensic source of truth)..."
 if [ -d ".git" ]; then
-  GIT_HIT=$(git log -p -- package-lock.json yarn.lock 2>/dev/null | grep -E "plain-crypto-js" | head -3)
+  GIT_HIT=$(git log -p -- package-lock.json yarn.lock bun.lockb pnpm-lock.yaml deno.lock 2>/dev/null | grep -E "plain-crypto-js" | head -3)
   if [ -n "$GIT_HIT" ]; then
     echo "  !! WARNING: plain-crypto-js appeared in lockfile history"
     echo "  $GIT_HIT"
