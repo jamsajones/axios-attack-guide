@@ -264,6 +264,14 @@ find "$SCAN_ROOT" \
   -name "package.json" \
   -not -path "*/node_modules/*" \
   -not -path "*/.git/*" \
+  -not -path "*/.bun/*" \
+  -not -path "*/.yarn/*" \
+  -not -path "*/.pnpm/*" \
+  -not -path "*/.pnpm-store/*" \
+  -not -path "*/.npm/*" \
+  -not -path "*/.cache/*" \
+  -not -path "*/Cache/*" \
+  -not -path "*/Caches/*" \
   2>/dev/null \
   > "$TMPFILE" &
 FIND_PID=$!
