@@ -11,15 +11,66 @@ Write-Host ""
 
 $found = $false
 
-# --- Check 1: Installed axios version ---
-Write-Host "[1/5] Checking installed axios version..." -ForegroundColor Yellow
-$axiosCheck = npm list axios 2>$null | Select-String "1\.14\.1|0\.30\.4"
-if ($axiosCheck) {
-    Write-Host "  !! AFFECTED: Compromised axios version found" -ForegroundColor Red
-    Write-Host "  $axiosCheck"
-    $found = $true
+# --- Check 1: Installed axios version in dependency tree ---
+Write-Host "[1/5] Checking axios versions in dependency tree..." -ForegroundColor Yellow
+
+if (Test-Path "yarn.lock") {
+    if (Get-Command yarn -ErrorAction SilentlyContinue) {
+        $treeOut = yarn why axios 2>$null
+        $compromised = $treeOut | Select-String "1\.14\.1|0\.30\.4"
+        if ($compromised) {
+            Write-Host "  !! AFFECTED: Compromised axios in yarn dependency tree" -ForegroundColor Red
+            $treeOut | ForEach-Object { Write-Host "    $_" }
+            $found = $true
+        } else {
+            Write-Host "  OK: No compromised axios in yarn dependency tree" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "  SKIP: yarn not found" -ForegroundColor Yellow
+    }
+} elseif (Test-Path "pnpm-lock.yaml") {
+    if (Get-Command pnpm -ErrorAction SilentlyContinue) {
+        $treeOut = pnpm list axios --depth=Infinity 2>$null
+        $compromised = $treeOut | Select-String "axios.*(1\.14\.1|0\.30\.4)"
+        if ($compromised) {
+            Write-Host "  !! AFFECTED: Compromised axios in pnpm dependency tree" -ForegroundColor Red
+            $treeOut | ForEach-Object { Write-Host "    $_" }
+            $found = $true
+        } else {
+            Write-Host "  OK: No compromised axios in pnpm dependency tree" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "  SKIP: pnpm not found" -ForegroundColor Yellow
+    }
+} elseif (Test-Path "bun.lockb") {
+    if (Get-Command bun -ErrorAction SilentlyContinue) {
+        $treeOut = bun pm ls --all 2>$null
+        $compromised = $treeOut | Select-String "axios@.*(1\.14\.1|0\.30\.4)"
+        if ($compromised) {
+            Write-Host "  !! AFFECTED: Compromised axios in bun dependency tree" -ForegroundColor Red
+            $compromised | ForEach-Object { Write-Host "    $_" }
+            $found = $true
+        } else {
+            Write-Host "  OK: No compromised axios in bun dependency tree" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "  SKIP: bun not found" -ForegroundColor Yellow
+    }
 } else {
-    Write-Host "  OK: No compromised axios version installed" -ForegroundColor Green
+    $axiosTree = npm list axios --all 2>$null
+    $axiosInstances = $axiosTree | Select-String "axios@"
+    if ($axiosInstances) {
+        $compromised = $axiosInstances | Select-String "axios@1\.14\.1|axios@0\.30\.4"
+        if ($compromised) {
+            Write-Host "  !! AFFECTED: Compromised axios in npm dependency tree" -ForegroundColor Red
+            $axiosTree | ForEach-Object { Write-Host "    $_" }
+            $found = $true
+        } else {
+            Write-Host "  OK: No compromised axios in npm dependency tree" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "  OK: axios not found in dependencies" -ForegroundColor Green
+    }
 }
 
 # --- Check 2: Lockfile ---

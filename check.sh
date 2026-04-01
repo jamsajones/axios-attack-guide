@@ -18,30 +18,74 @@ echo ""
 FOUND=0
 
 # --- Check 1: Installed axios version in entire dependency tree ---
-echo "[1/6] Checking axios versions in entire dependency tree..."
-if command -v npm &> /dev/null; then
-  # Get full tree output so parent packages are visible
+echo "[1/6] Checking axios versions in dependency tree..."
+
+check_dep_tree_npm() {
+  if ! command -v npm &> /dev/null; then echo "  SKIP: npm not found"; return; fi
   AXIOS_TREE=$(npm list axios --all 2>/dev/null)
   AXIOS_INSTANCES=$(echo "$AXIOS_TREE" | grep "axios@")
-
-  if [ -n "$AXIOS_INSTANCES" ]; then
-    # Check if any of them are compromised versions
-    COMPROMISED=$(echo "$AXIOS_INSTANCES" | grep -E "axios@1\.14\.1|axios@0\.30\.4")
-
-    if [ -n "$COMPROMISED" ]; then
-      echo "  !! AFFECTED: Compromised axios version found in dependency tree"
-      echo "$AXIOS_TREE" | sed 's/^/    /'
-      FOUND=1
-    else
-      echo "  OK: No compromised axios version in dependency tree"
-      echo "  Found versions (showing parent dependencies):"
-      echo "$AXIOS_TREE" | sed 's/^/    /'
-    fi
+  if [ -z "$AXIOS_INSTANCES" ]; then echo "  OK: axios not found in npm dependencies"; return; fi
+  COMPROMISED=$(echo "$AXIOS_INSTANCES" | grep -E "axios@1\.14\.1|axios@0\.30\.4")
+  if [ -n "$COMPROMISED" ]; then
+    echo "  !! AFFECTED: Compromised axios version found in npm dependency tree"
+    echo "$AXIOS_TREE" | sed 's/^/    /'
+    FOUND=1
   else
-    echo "  OK: axios not found in dependencies"
+    echo "  OK: No compromised axios in npm dependency tree"
   fi
+}
+
+check_dep_tree_yarn() {
+  if ! command -v yarn &> /dev/null; then return; fi
+  if [ ! -f "yarn.lock" ]; then return; fi
+  YARN_OUT=$(yarn why axios 2>/dev/null)
+  COMPROMISED=$(echo "$YARN_OUT" | grep -E "1\.14\.1|0\.30\.4")
+  if [ -n "$COMPROMISED" ]; then
+    echo "  !! AFFECTED: Compromised axios version found in yarn dependency tree"
+    echo "$YARN_OUT" | sed 's/^/    /'
+    FOUND=1
+  else
+    echo "  OK: No compromised axios in yarn dependency tree"
+  fi
+}
+
+check_dep_tree_pnpm() {
+  if ! command -v pnpm &> /dev/null; then return; fi
+  if [ ! -f "pnpm-lock.yaml" ]; then return; fi
+  PNPM_OUT=$(pnpm list axios --depth=Infinity 2>/dev/null)
+  COMPROMISED=$(echo "$PNPM_OUT" | grep -E "axios.*(1\.14\.1|0\.30\.4)")
+  if [ -n "$COMPROMISED" ]; then
+    echo "  !! AFFECTED: Compromised axios version found in pnpm dependency tree"
+    echo "$PNPM_OUT" | sed 's/^/    /'
+    FOUND=1
+  else
+    echo "  OK: No compromised axios in pnpm dependency tree"
+  fi
+}
+
+check_dep_tree_bun() {
+  if ! command -v bun &> /dev/null; then return; fi
+  if [ ! -f "bun.lockb" ]; then return; fi
+  BUN_OUT=$(bun pm ls --all 2>/dev/null)
+  COMPROMISED=$(echo "$BUN_OUT" | grep -E "axios@.*(1\.14\.1|0\.30\.4)")
+  if [ -n "$COMPROMISED" ]; then
+    echo "  !! AFFECTED: Compromised axios version found in bun dependency tree"
+    echo "$BUN_OUT" | grep -i axios | sed 's/^/    /'
+    FOUND=1
+  else
+    echo "  OK: No compromised axios in bun dependency tree"
+  fi
+}
+
+# Run the dep tree check for whichever package manager is available
+if [ -f "yarn.lock" ]; then
+  check_dep_tree_yarn
+elif [ -f "pnpm-lock.yaml" ]; then
+  check_dep_tree_pnpm
+elif [ -f "bun.lockb" ]; then
+  check_dep_tree_bun
 else
-  echo "  SKIP: npm not found"
+  check_dep_tree_npm
 fi
 
 # --- Check 2: Parse lockfiles for axios specifically ---

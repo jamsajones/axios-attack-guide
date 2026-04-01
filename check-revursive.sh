@@ -41,9 +41,59 @@ check_project() {
   local dir="$1"
   local project_found=0
 
+  # --- Dependency tree check ---
+  local pkg_manager="npm"
+  if [ -f "$dir/yarn.lock" ]; then pkg_manager="yarn"
+  elif [ -f "$dir/pnpm-lock.yaml" ]; then pkg_manager="pnpm"
+  elif [ -f "$dir/bun.lockb" ]; then pkg_manager="bun"
+  elif [ -f "$dir/deno.lock" ]; then pkg_manager="deno"
+  fi
+
+  case "$pkg_manager" in
+    yarn)
+      if command -v yarn &> /dev/null; then
+        local tree_hit
+        tree_hit=$(cd "$dir" && yarn why axios 2>/dev/null | grep -E "1\.14\.1|0\.30\.4")
+        if [ -n "$tree_hit" ]; then
+          hit "Compromised axios in yarn dependency tree: $tree_hit"
+          project_found=1
+        fi
+      fi
+      ;;
+    pnpm)
+      if command -v pnpm &> /dev/null; then
+        local tree_hit
+        tree_hit=$(cd "$dir" && pnpm list axios --depth=Infinity 2>/dev/null | grep -E "axios.*(1\.14\.1|0\.30\.4)")
+        if [ -n "$tree_hit" ]; then
+          hit "Compromised axios in pnpm dependency tree: $tree_hit"
+          project_found=1
+        fi
+      fi
+      ;;
+    bun)
+      if command -v bun &> /dev/null; then
+        local tree_hit
+        tree_hit=$(cd "$dir" && bun pm ls --all 2>/dev/null | grep -E "axios@.*(1\.14\.1|0\.30\.4)")
+        if [ -n "$tree_hit" ]; then
+          hit "Compromised axios in bun dependency tree: $tree_hit"
+          project_found=1
+        fi
+      fi
+      ;;
+    *)
+      if command -v npm &> /dev/null; then
+        local tree_hit
+        tree_hit=$(cd "$dir" && npm list axios --all 2>/dev/null | grep -E "axios@1\.14\.1|axios@0\.30\.4")
+        if [ -n "$tree_hit" ]; then
+          hit "Compromised axios in npm dependency tree: $tree_hit"
+          project_found=1
+        fi
+      fi
+      ;;
+  esac
+
   # --- Lockfile checks ---
   local lockfile_found=0
-  local pkg_manager="npm"
 
   if [ -f "$dir/package-lock.json" ]; then
     lockfile_found=1
@@ -57,7 +107,6 @@ check_project() {
 
   if [ -f "$dir/yarn.lock" ]; then
     lockfile_found=1
-    pkg_manager="yarn"
     local lock_hit
     lock_hit=$(check_axios_yarn_format "$dir/yarn.lock")
     if [ -n "$lock_hit" ]; then
@@ -68,7 +117,6 @@ check_project() {
 
   if [ -f "$dir/pnpm-lock.yaml" ]; then
     lockfile_found=1
-    pkg_manager="pnpm"
     local lock_hit
     lock_hit=$(grep -E "(^|/)(axios)@(1\.14\.1|0\.30\.4):" "$dir/pnpm-lock.yaml" | head -3)
     if [ -n "$lock_hit" ]; then
@@ -79,7 +127,6 @@ check_project() {
 
   if [ -f "$dir/deno.lock" ]; then
     lockfile_found=1
-    pkg_manager="deno"
     local lock_hit
     lock_hit=$(grep -E '"axios@(1\.14\.1|0\.30\.4)"' "$dir/deno.lock" | head -3)
     if [ -n "$lock_hit" ]; then
@@ -90,7 +137,6 @@ check_project() {
 
   if [ -f "$dir/bun.lockb" ]; then
     lockfile_found=1
-    pkg_manager="bun"
     if command -v bun &> /dev/null; then
       local lock_hit
       lock_hit=$(bun "$dir/bun.lockb" 2>/dev/null | check_axios_yarn_format /dev/stdin)
