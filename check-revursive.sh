@@ -260,12 +260,8 @@ echo "(This may take a moment.)"
 echo ""
 
 PROJECT_DIRS=()
-declare -A SEEN_DIRS
 PROJECT_COUNT=0
-while IFS= read -r pjson; do
-  dir=$(dirname "$pjson")
-  [ -n "${SEEN_DIRS[$dir]+x}" ] && continue
-  SEEN_DIRS[$dir]=1
+while IFS= read -r dir; do
   PROJECT_DIRS+=("$dir")
   PROJECT_COUNT=$((PROJECT_COUNT + 1))
   printf "\r  Found %d project(s) so far..." "$PROJECT_COUNT"
@@ -274,7 +270,9 @@ done < <(
     -name "package.json" \
     -not -path "*/node_modules/*" \
     -not -path "*/.git/*" \
-    2>/dev/null
+    2>/dev/null \
+  | xargs -I{} dirname {} \
+  | sort -u
 )
 printf "\r%-40s\n" ""  # clear the progress line
 
