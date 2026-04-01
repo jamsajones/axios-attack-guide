@@ -214,8 +214,11 @@ echo "(This may take a moment.)"
 echo ""
 
 PROJECT_DIRS=()
+PROJECT_COUNT=0
 while IFS= read -r dir; do
   PROJECT_DIRS+=("$dir")
+  PROJECT_COUNT=$((PROJECT_COUNT + 1))
+  printf "\r  Found %d project(s) so far..." "$PROJECT_COUNT"
 done < <(
   find "$SCAN_ROOT" \
     -name "package.json" \
@@ -225,6 +228,7 @@ done < <(
   | xargs -I{} dirname {} \
   | sort -u
 )
+printf "\r%-40s\n" ""  # clear the progress line
 
 if [ ${#PROJECT_DIRS[@]} -eq 0 ]; then
   echo "No JS projects found under $SCAN_ROOT"
