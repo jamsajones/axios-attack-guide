@@ -15,7 +15,7 @@
 # Source: StepSecurity, Socket.dev, GitHub Issue #10604
 # ============================================================================
 
-SCAN_ROOT="${1:-$HOME}"
+SCAN_ROOT="${1:-$(pwd)}"
 FOUND=0
 AFFECTED_PROJECTS=()
 
@@ -259,22 +259,35 @@ echo "Searching for JS projects under $SCAN_ROOT ..."
 echo "(This may take a moment.)"
 echo ""
 
+TMPFILE=$(mktemp)
+find "$SCAN_ROOT" \
+  -name "package.json" \
+  -not -path "*/node_modules/*" \
+  -not -path "*/.git/*" \
+  2>/dev/null \
+  > "$TMPFILE" &
+FIND_PID=$!
+
+SPINNER='|/-\'
+i=0
+while kill -0 "$FIND_PID" 2>/dev/null; do
+  i=$(( (i + 1) % 4 ))
+  printf "\r  Scanning... %s" "$(echo "$SPINNER" | cut -c$((i+1)))"
+  sleep 0.2
+done
+wait "$FIND_PID"
+printf "\r%-40s\n" ""  # clear the spinner line
+
 PROJECT_DIRS=()
-PROJECT_COUNT=0
-while IFS= read -r dir; do
+while IFS= read -r pjson; do
+  dir=$(dirname "$pjson")
+  # Deduplicate without associative arrays (bash 3.2 compat)
+  case " ${PROJECT_DIRS[*]} " in
+    *" $dir "*) continue ;;
+  esac
   PROJECT_DIRS+=("$dir")
-  PROJECT_COUNT=$((PROJECT_COUNT + 1))
-  printf "\r  Found %d project(s) so far..." "$PROJECT_COUNT"
-done < <(
-  find "$SCAN_ROOT" \
-    -name "package.json" \
-    -not -path "*/node_modules/*" \
-    -not -path "*/.git/*" \
-    2>/dev/null \
-  | xargs -I{} dirname {} \
-  | sort -u
-)
-printf "\r%-40s\n" ""  # clear the progress line
+done < "$TMPFILE"
+rm -f "$TMPFILE"
 
 if [ ${#PROJECT_DIRS[@]} -eq 0 ]; then
   echo "No JS projects found under $SCAN_ROOT"
