@@ -43,6 +43,31 @@ cd axios-attack-guide
 
 The scripts check all 6 indicators: axios version, lockfile, git history, malicious dependency, RAT artifacts, and C2 connections.
 
+### Scan Multiple Projects (Recursive)
+
+The default scripts only check the directory you run them from. The recursive variant walks a directory tree, checks every JS project it finds, and runs system-global checks (RAT artifacts, C2 connections) once at the end.
+
+> **Note:** `check-revursive.sh` scans the **current working directory** by default. Pass a path to scan somewhere else.
+
+**Mac/Linux — scan current directory:**
+```bash
+curl -sL https://raw.githubusercontent.com/thenetworkchuck/axios-attack-guide/main/check-revursive.sh | bash
+```
+
+**Mac/Linux — scan a specific directory:**
+```bash
+curl -sL https://raw.githubusercontent.com/thenetworkchuck/axios-attack-guide/main/check-revursive.sh | bash -s /path/to/projects
+```
+
+Or clone and run locally:
+```bash
+git clone https://github.com/thenetworkchuck/axios-attack-guide.git
+cd axios-attack-guide
+chmod +x check-revursive.sh
+./check-revursive.sh              # scans current directory
+./check-revursive.sh /srv/apps    # scans a specific directory
+```
+
 ---
 
 ## Manual Detection Commands
